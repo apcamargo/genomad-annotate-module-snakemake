@@ -2,3 +2,69 @@
 # Please follow the best practices: 
 # https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
 # in particular regarding the standardized folder structure mentioned there. 
+
+import os 
+
+FASTA_PREFIXES = [
+    "GCA_009025895.1_ASM902589v1_genomic",
+]
+
+scattergather:
+    split=workflow.cores,
+
+rule all:
+    input:
+      expand(
+        [   "results/annotate/{fasta_prefix}/{fasta_prefix}_proteins.faa",
+#            "results/annotate/{fasta_prefix}/{fasta_prefix}_mmseqs2.tsv",
+#            "results/annotate/{fasta_prefix}/{fasta_prefix}_genes.tsv",
+#            "results/annotate/{fasta_prefix}/{fasta_prefix}_taxonomy.tsv",
+#            directory("results/annotate/{fasta_prefix}/mmseqs2"),
+        ],
+        fasta_prefix = FASTA_PREFIXES,
+      )
+
+rule aggregate_protein_predictions:
+    input:
+        gather.split("results/split_fastas/{{fasta_prefix}}/{scatteritem}.predicted_proteins.faa")
+    output:
+        "results/annotate/{fasta_prefix}/{fasta_prefix}_proteins.faa",
+    shell:
+        "cat {input} >{output}"
+
+rule predict_proteins:
+    input:
+        "results/split_fastas/{fasta_prefix}/{fasta_prefix}.{scatteritem}.fna"
+    output:
+        "results/split_fastas/{fasta_prefix}/{scatteritem}.predicted_proteins.faa"
+    log:
+        "logs/predict_proteins/{fasta_prefix}/{scatteritem}.predicted_proteins.log"
+    conda:
+        "envs/prodigal_gv.yaml"
+    shell:
+        "prodigal-gv -m -p meta -i {input} -a {output} >{log}"
+
+rule split_input_fasta:
+    input:
+        ".test/data/{fasta_prefix}.fna"
+    output:
+        scatter.split("results/split_fastas/{{fasta_prefix}}/{{fasta_prefix}}.{scatteritem}.fna")
+    conda:
+        "envs/seqkit.yaml"
+    params:
+        number_of_parts=workflow.cores,
+        dirname=lambda wc, output: os.path.dirname(output[0]),
+    shell:
+        "seqkit split2 "
+        " --by-part {params.number_of_parts} "
+        " --out-dir {params.dirname}"
+        " {input}; "
+        'FILES=( {params.dirname}/*.fna );'
+        "for f in ${{FILES[@]}}; "
+        "do "
+        "  without_suffix=${{f##.fna}}; "
+        "  echo $without_suffix;"
+        "  number=${{without_suffix%%*.part_0+}}; "
+        "  echo $number;"
+        "  mv $f ${{f%%part_*.fna}}.${{number}}-of-{params.number_of_parts}.fna; "
+        "done "
