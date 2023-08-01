@@ -63,9 +63,7 @@ rule split_input_fasta:
         'FILES=( {params.dirname}/*.fna );'
         "for f in ${{FILES[@]}}; "
         "do "
-        "  without_suffix=${{f##.fna}}; "
-        "  echo $without_suffix;"
-        "  number=${{without_suffix%%*.part_0+}}; "
-        "  echo $number;"
-        "  mv $f ${{f%%part_*.fna}}.${{number}}-of-{params.number_of_parts}.fna; "
+        "  without_suffix=${{f%%.fna}}; "
+        "  number=${{without_suffix##*part_}}; "
+        "  mv $f ${{f%%.part_*.fna}}.${{number##*0}}-of-{params.number_of_parts}.fna; "
         "done "
